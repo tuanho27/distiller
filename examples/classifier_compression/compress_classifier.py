@@ -88,6 +88,8 @@ def main():
 
     # Parse arguments
     args = parser.get_parser().parse_args()
+    #print("Summary",args)
+    #print(type(args))
     if args.epochs is None:
         args.epochs = 90
 
@@ -447,6 +449,7 @@ def test(test_loader, model, criterion, loggers, activations_collectors, args):
     msglogger.info('--- test ---------------------')
     if activations_collectors is None:
         activations_collectors = create_activation_stats_collectors(model, None)
+        print("===========",activations_collectors)
     with collectors_context(activations_collectors["test"]) as collectors:
         top1, top5, lossses = _validate(test_loader, model, criterion, loggers, args)
         distiller.log_activation_statsitics(-1, "test", loggers, collector=collectors['sparsity'])
@@ -639,6 +642,7 @@ def evaluate_model(model, criterion, test_loader, loggers, activations_collector
     if args.quantize_eval:
         model.cpu()
         quantizer = quantization.PostTrainLinearQuantizer.from_args(model, args)
+        print("AAAA",model.input_shape)
         quantizer.prepare_model(distiller.get_dummy_input(input_shape=model.input_shape))
         model.to(args.device)
 
@@ -705,6 +709,7 @@ def acts_quant_stats_collection(model, criterion, loggers, args):
     train_loader, val_loader, test_loader, _ = load_data(args)
     test_fn = partial(test, test_loader=test_loader, criterion=criterion,
                       loggers=loggers, args=args, activations_collectors=None)
+    #print("Start Testing")
     collect_quant_stats(model, test_fn, save_dir=msglogger.logdir,
                         classes=None, inplace_runtime_check=True, disable_inplace_attrs=True)
 

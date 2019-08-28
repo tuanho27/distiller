@@ -1041,9 +1041,17 @@ def update_ema(biased_ema, value, decay, step):
     return biased_ema, unbiased_ema
 
 
-def inputs_quantize_wrapped_forward(self, input):
-    input = self.inputs_quant(input)
-    return self.original_forward(input)
+def inputs_quantize_wrapped_forward(self, **input):
+    # import ipdb; ipdb.set_trace() 
+    img = input['img'].data[0].cuda()
+    img_meta = input['img_meta'].data[0]
+    gt_bboxes = input['gt_bboxes'].data[0]
+    gt_labels = input['gt_labels'].data[0]
+    img = self.inputs_quant(img)
+    # data = dict(img=input,img_meta=img_meta, gt_bboxes=gt_bboxes,gt_labels=gt_labels) 
+    data = dict(img=img,img_meta=img_meta,gt_bboxes=[b.cuda() for b in gt_bboxes],gt_labels=[gt.cuda() for gt in gt_labels])
+    # import ipdb; ipdb.set_trace() 
+    return self.original_forward(**data)
 
 
 class FakeLinearQuantization(nn.Module):
@@ -1105,7 +1113,6 @@ class FakeLinearQuantization(nn.Module):
 
         input = clamp(input, actual_min.item(), actual_max.item(), False)
         input = LinearQuantizeSTE.apply(input, self.scale, self.zero_point, self.dequantize, False)
-
         return input
 
     def extra_repr(self):

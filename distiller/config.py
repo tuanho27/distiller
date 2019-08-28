@@ -90,6 +90,7 @@ def dict_config(model, optimizer, sched_dict, scheduler=None, resumed_epoch=None
                 instance_name, args = __policy_params(policy_def, 'quantizer')
                 assert instance_name in quantizers, "Quantizer {} was not defined in the list of quantizers".format(instance_name)
                 quantizer = quantizers[instance_name]
+                print("Quantizer:", quantizer)
                 policy = distiller.QuantizationPolicy(quantizer)
 
             elif 'lr_scheduler' in policy_def:
@@ -108,10 +109,10 @@ def dict_config(model, optimizer, sched_dict, scheduler=None, resumed_epoch=None
                 raise ValueError("\nFATAL Parsing error while parsing the pruning schedule - unknown policy [%s]".format(policy_def))
 
             add_policy_to_scheduler(policy, policy_def, scheduler)
-
         # Any changes to the optmizer caused by a quantizer have occured by now, so safe to create LR schedulers
         lr_schedulers = __factory('lr_schedulers', model, sched_dict, optimizer=optimizer,
                                   last_epoch=(resumed_epoch if resumed_epoch is not None else -1))
+        print("Quantizer policy:",policy, lr_policies)
         for policy_def in lr_policies:
             instance_name, args = __policy_params(policy_def, 'lr_scheduler')
             assert instance_name in lr_schedulers, "LR-scheduler {} was not defined in the list of lr-schedulers".format(
