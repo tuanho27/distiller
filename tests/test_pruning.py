@@ -16,6 +16,7 @@
 from collections import namedtuple
 import numpy as np
 import logging
+import math
 import torch
 import distiller
 import common
@@ -120,16 +121,20 @@ def test_ranked_filter_pruning(parallel):
                                                    is_parallel=parallel)
     test_vgg19_conv_fc_interface(parallel, model=model, zeros_mask_dict=zeros_mask_dict)
 
-
+# todo: add a similar test for ranked channel pruning
 def test_prune_all_filters(parallel):
     """Pruning all of the filteres in a weights tensor of a Convolution
     is illegal and should raise an exception.
     """
     with pytest.raises(ValueError):
-        ranked_filter_pruning(resnet20_cifar(parallel), ratio_to_prune=1.0, is_parallel=parallel)
+        ranked_filter_pruning(resnet20_cifar(parallel), ratio_to_prune=1.0,
+                              is_parallel=parallel, rounding_fn=math.ceil)
+    with pytest.raises(ValueError):
+        ranked_filter_pruning(resnet20_cifar(parallel), ratio_to_prune=1.0,
+                              is_parallel=parallel, rounding_fn=math.floor)
 
 
-def ranked_filter_pruning(config, ratio_to_prune, is_parallel):
+def ranked_filter_pruning(config, ratio_to_prune, is_parallel, rounding_fn=math.floor):
     """Test L1 ranking and pruning of filters.
     First we rank and prune the filters of a Convolutional layer using
     a L1RankedStructureParameterPruner.  Then we physically remove the
@@ -154,7 +159,8 @@ def ranked_filter_pruning(config, ratio_to_prune, is_parallel):
         pruner = distiller.pruning.L1RankedStructureParameterPruner("filter_pruner",
                                                                     group_type="Filters",
                                                                     desired_sparsity=ratio_to_prune,
-                                                                    weights=pair[0] + ".weight")
+                                                                    weights=pair[0] + ".weight",
+                                                                    rounding_fn=rounding_fn)
         pruner.set_param_mask(conv1_p, pair[0] + ".weight", zeros_mask_dict, meta=None)
 
         conv1 = common.find_module_by_name(model, pair[0])
@@ -311,7 +317,7 @@ def arbitrary_channel_pruning(config, channels_to_remove, is_parallel):
     # We save 3 times, and load twice, to make sure to cover some corner cases:
     #   - Make sure that after loading, the model still has hold of the thinning recipes
     #   - Make sure that after a 2nd load, there no problem loading (in this case, the
-    #   - tensors are already thin, so this is a new flow)
+    #     tensors are already thin, so this is a new flow)
     # (1)
     save_checkpoint(epoch=0, arch=config.arch, model=model, optimizer=None)
     model_2 = create_model(False, config.dataset, config.arch, parallel=is_parallel)
@@ -319,14 +325,13 @@ def arbitrary_channel_pruning(config, channels_to_remove, is_parallel):
     model_2(dummy_input)
     conv2 = common.find_module_by_name(model_2, pair[1])
     assert conv2 is not None
-    with pytest.raises(KeyError):
-        model_2 = load_lean_checkpoint(model_2, 'checkpoint.pth.tar')
-    compression_scheduler = distiller.CompressionScheduler(model)
-    hasattr(model, 'thinning_recipes')
+    model_2 = load_lean_checkpoint(model_2, 'checkpoint.pth.tar')
+    assert hasattr(model_2, 'thinning_recipes')
 
     run_forward_backward(model, optimizer, dummy_input)
 
     # (2)
+    compression_scheduler = distiller.CompressionScheduler(model)
     save_checkpoint(epoch=0, arch=config.arch, model=model, optimizer=None, scheduler=compression_scheduler)
     model_2 = load_lean_checkpoint(model_2, 'checkpoint.pth.tar')
     assert hasattr(model_2, 'thinning_recipes')
